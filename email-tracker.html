@@ -933,39 +933,35 @@ function importData(event) {
 
 // ===== Power Automate ファイル取込 =====
 function importFromPowerAutomate(event) {
-  const files = event.target.files;
-  if (!files.length) return;
+  const fileList = Array.from(event.target.files);
+  event.target.value = '';
+  if (!fileList.length) return;
   let totalAdded = 0;
   let processed = 0;
+  const totalFiles = fileList.length;
   const emails = loadEmails();
   const existingKeys = new Set(emails.map(e => e.subject + '|' + e.from + '|' + e.date));
 
-  Array.from(files).forEach(file => {
+  fileList.forEach(file => {
     const reader = new FileReader();
     reader.onload = function(e) {
       const text = e.target.result.replace(/\r\n/g, '\n').replace(/^\uFEFF/, '').trim();
-      alert('ファイル内容:\n' + text.slice(0, 200));
       const parsed = parsePowerAutomateText(text);
-      alert('解析結果: ' + parsed.length + '件\n' + JSON.stringify(parsed[0] || {}));
-      if (parsed.length > 0) {
-        for (const p of parsed) {
-          const key = p.subject + '|' + p.from + '|' + p.date;
-          alert('キー: ' + key + '\n既存: ' + existingKeys.has(key));
-          if (existingKeys.has(key)) continue;
-          existingKeys.add(key);
-          emails.unshift({
-            id: generateId(), subject: p.subject, from: p.from,
-            date: p.date, priority: 'mid', status: 'unread',
-            summary: p.preview, replyNeeded: 'none', draft: '', memo: '',
-            fromEmail: p.from,
-            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
-          });
-          totalAdded++;
-        }
+      for (const p of parsed) {
+        const key = p.subject + '|' + p.from + '|' + p.date;
+        if (existingKeys.has(key)) continue;
+        existingKeys.add(key);
+        emails.unshift({
+          id: generateId(), subject: p.subject, from: p.from,
+          date: p.date, priority: 'mid', status: 'unread',
+          summary: p.preview, replyNeeded: 'none', draft: '', memo: '',
+          fromEmail: p.from,
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+        });
+        totalAdded++;
       }
       processed++;
-      alert('追加数: ' + totalAdded + ' / 既存メール数: ' + emails.length);
-      if (processed === files.length) {
+      if (processed === totalFiles) {
         saveEmails(emails);
         render();
         showStatus(totalAdded + '件のメールを取込みました', 'success');
@@ -973,7 +969,6 @@ function importFromPowerAutomate(event) {
     };
     reader.readAsText(file);
   });
-  event.target.value = '';
 }
 
 function parsePowerAutomateText(text) {
