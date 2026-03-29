@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>メール対応トラッカー</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', 'Hiragino Sans', 'Meiryo', sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #2c3e50, #3498db);
+    color: #fff;
+    padding: 20px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 { font-size: 1.4rem; }
+  .header-date {
+    font-size: 0.95rem;
+    opacity: 0.9;
+  }
+  .summary-bar {
+    display: flex;
+    gap: 16px;
+    padding: 16px 24px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    flex-wrap: wrap;
+  }
+  .summary-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .summary-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .dot-unread { background: #e74c3c; }
+  .dot-read { background: #f39c12; }
+  .dot-done { background: #27ae60; }
+
+  .container { max-width: 960px; margin: 0 auto; padding: 20px; }
+
+  /* Filter */
+  .filter-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .filter-bar input[type="date"] {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .filter-bar select {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: opacity 0.2s;
+  }
+  .btn:hover { opacity: 0.85; }
+  .btn-primary { background: #3498db; color: #fff; }
+  .btn-success { background: #27ae60; color: #fff; }
+  .btn-danger { background: #e74c3c; color: #fff; }
+  .btn-warning { background: #f39c12; color: #fff; }
+  .btn-secondary { background: #95a5a6; color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 0.8rem; }
+
+  /* Form */
+  .add-form {
+    background: #fff;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    display: none;
+  }
+  .add-form.show { display: block; }
+  .add-form h2 { font-size: 1.1rem; margin-bottom: 14px; }
+  .form-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+  }
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 180px;
+  }
+  .form-group label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: #666;
+  }
+  .form-group input, .form-group select, .form-group textarea {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.9rem;
+  }
+  .form-group textarea { resize: vertical; min-height: 60px; }
+
+  /* Email List */
+  .email-list { display: flex; flex-direction: column; gap: 10px; }
+  .email-card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    border-left: 5px solid #ccc;
+    transition: border-color 0.2s;
+  }
+  .email-card.status-unread { border-left-color: #e74c3c; }
+  .email-card.status-read { border-left-color: #f39c12; }
+  .email-card.status-done { border-left-color: #27ae60; }
+
+  .email-body { flex: 1; }
+  .email-subject {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 4px;
+  }
+  .email-meta {
+    font-size: 0.8rem;
+    color: #888;
+    margin-bottom: 6px;
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .email-memo {
+    font-size: 0.85rem;
+    color: #555;
+    background: #f9f9f9;
+    padding: 6px 10px;
+    border-radius: 4px;
+    margin-top: 6px;
+  }
+  .priority-high { color: #e74c3c; font-weight: 700; }
+  .priority-mid { color: #f39c12; font-weight: 700; }
+  .priority-low { color: #27ae60; font-weight: 700; }
+
+  .email-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .empty-msg {
+    text-align: center;
+    color: #aaa;
+    padding: 40px;
+    font-size: 1rem;
+  }
+
+  /* Export */
+  .export-bar {
+    margin-top: 20px;
+    text-align: right;
+  }
+
+  @media (max-width: 600px) {
+    header { padding: 14px 16px; }
+    .container { padding: 14px; }
+    .email-card { flex-direction: column; }
+    .email-actions { align-self: flex-end; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>メール対応トラッカー</h1>
+  <div class="header-date" id="todayDate"></div>
+</header>
+
+<div class="summary-bar">
+  <div class="summary-item"><span class="summary-dot dot-unread"></span> 未対応: <span id="countUnread">0</span></div>
+  <div class="summary-item"><span class="summary-dot dot-read"></span> 確認済: <span id="countRead">0</span></div>
+  <div class="summary-item"><span class="summary-dot dot-done"></span> 対応済: <span id="countDone">0</span></div>
+</div>
+
+<div class="container">
+  <div class="filter-bar">
+    <input type="date" id="filterDate" title="日付でフィルタ">
+    <select id="filterStatus">
+      <option value="all">全てのステータス</option>
+      <option value="unread">未対応</option>
+      <option value="read">確認済</option>
+      <option value="done">対応済</option>
+    </select>
+    <select id="filterPriority">
+      <option value="all">全ての優先度</option>
+      <option value="high">高</option>
+      <option value="mid">中</option>
+      <option value="low">低</option>
+    </select>
+    <button class="btn btn-primary" onclick="toggleForm()">+ メール追加</button>
+  </div>
+
+  <div class="add-form" id="addForm">
+    <h2 id="formTitle">メールを追加</h2>
+    <input type="hidden" id="editId" value="">
+    <div class="form-row">
+      <div class="form-group">
+        <label>件名 *</label>
+        <input type="text" id="inputSubject" placeholder="件名を入力">
+      </div>
+      <div class="form-group">
+        <label>送信者</label>
+        <input type="text" id="inputFrom" placeholder="送信者名またはアドレス">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="max-width:160px">
+        <label>受信日</label>
+        <input type="date" id="inputDate">
+      </div>
+      <div class="form-group" style="max-width:120px">
+        <label>優先度</label>
+        <select id="inputPriority">
+          <option value="mid">中</option>
+          <option value="high">高</option>
+          <option value="low">低</option>
+        </select>
+      </div>
+      <div class="form-group" style="max-width:140px">
+        <label>ステータス</label>
+        <select id="inputStatus">
+          <option value="unread">未対応</option>
+          <option value="read">確認済</option>
+          <option value="done">対応済</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>メモ</label>
+        <textarea id="inputMemo" placeholder="対応内容や備考を入力"></textarea>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success" onclick="saveEmail()">保存</button>
+      <button class="btn btn-secondary" onclick="toggleForm()">キャンセル</button>
+    </div>
+  </div>
+
+  <div class="email-list" id="emailList"></div>
+
+  <div class="export-bar">
+    <button class="btn btn-secondary btn-sm" onclick="exportData()">データエクスポート (JSON)</button>
+    <label class="btn btn-secondary btn-sm" style="display:inline-block">
+      データインポート
+      <input type="file" accept=".json" onchange="importData(event)" style="display:none">
+    </label>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'email_tracker_data';
+const STATUS_LABELS = { unread: '未対応', read: '確認済', done: '対応済' };
+const PRIORITY_LABELS = { high: '高', mid: '中', low: '低' };
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadEmails() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+
+function saveEmails(emails) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(emails));
+}
+
+function generateId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+// Init
+document.getElementById('filterDate').value = today();
+document.getElementById('inputDate').value = today();
+document.getElementById('todayDate').textContent = new Date().toLocaleDateString('ja-JP', {
+  year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
+});
+
+function toggleForm(editData) {
+  const form = document.getElementById('addForm');
+  const title = document.getElementById('formTitle');
+  if (editData) {
+    document.getElementById('editId').value = editData.id;
+    document.getElementById('inputSubject').value = editData.subject;
+    document.getElementById('inputFrom').value = editData.from;
+    document.getElementById('inputDate').value = editData.date;
+    document.getElementById('inputPriority').value = editData.priority;
+    document.getElementById('inputStatus').value = editData.status;
+    document.getElementById('inputMemo').value = editData.memo;
+    title.textContent = 'メールを編集';
+    form.classList.add('show');
+  } else if (form.classList.contains('show')) {
+    form.classList.remove('show');
+    clearForm();
+  } else {
+    clearForm();
+    title.textContent = 'メールを追加';
+    document.getElementById('inputDate').value = today();
+    form.classList.add('show');
+  }
+}
+
+function clearForm() {
+  document.getElementById('editId').value = '';
+  document.getElementById('inputSubject').value = '';
+  document.getElementById('inputFrom').value = '';
+  document.getElementById('inputPriority').value = 'mid';
+  document.getElementById('inputStatus').value = 'unread';
+  document.getElementById('inputMemo').value = '';
+}
+
+function saveEmail() {
+  const subject = document.getElementById('inputSubject').value.trim();
+  if (!subject) { alert('件名を入力してください'); return; }
+
+  const emails = loadEmails();
+  const editId = document.getElementById('editId').value;
+  const data = {
+    id: editId || generateId(),
+    subject: subject,
+    from: document.getElementById('inputFrom').value.trim(),
+    date: document.getElementById('inputDate').value || today(),
+    priority: document.getElementById('inputPriority').value,
+    status: document.getElementById('inputStatus').value,
+    memo: document.getElementById('inputMemo').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (editId) {
+    const idx = emails.findIndex(e => e.id === editId);
+    if (idx !== -1) emails[idx] = data;
+  } else {
+    data.createdAt = data.updatedAt;
+    emails.unshift(data);
+  }
+
+  saveEmails(emails);
+  toggleForm();
+  render();
+}
+
+function changeStatus(id, newStatus) {
+  const emails = loadEmails();
+  const email = emails.find(e => e.id === id);
+  if (email) {
+    email.status = newStatus;
+    email.updatedAt = new Date().toISOString();
+    saveEmails(emails);
+    render();
+  }
+}
+
+function deleteEmail(id) {
+  if (!confirm('このメールを削除しますか？')) return;
+  const emails = loadEmails().filter(e => e.id !== id);
+  saveEmails(emails);
+  render();
+}
+
+function editEmail(id) {
+  const email = loadEmails().find(e => e.id === id);
+  if (email) toggleForm(email);
+}
+
+function render() {
+  const emails = loadEmails();
+  const filterDate = document.getElementById('filterDate').value;
+  const filterStatus = document.getElementById('filterStatus').value;
+  const filterPriority = document.getElementById('filterPriority').value;
+
+  const filtered = emails.filter(e => {
+    if (filterDate && e.date !== filterDate) return false;
+    if (filterStatus !== 'all' && e.status !== filterStatus) return false;
+    if (filterPriority !== 'all' && e.priority !== filterPriority) return false;
+    return true;
+  });
+
+  // Sort: unread first, then read, then done; within same status, high priority first
+  const statusOrder = { unread: 0, read: 1, done: 2 };
+  const prioOrder = { high: 0, mid: 1, low: 2 };
+  filtered.sort((a, b) => {
+    if (statusOrder[a.status] !== statusOrder[b.status])
+      return statusOrder[a.status] - statusOrder[b.status];
+    return prioOrder[a.priority] - prioOrder[b.priority];
+  });
+
+  // Summary counts (for filtered date)
+  const dateEmails = emails.filter(e => !filterDate || e.date === filterDate);
+  document.getElementById('countUnread').textContent = dateEmails.filter(e => e.status === 'unread').length;
+  document.getElementById('countRead').textContent = dateEmails.filter(e => e.status === 'read').length;
+  document.getElementById('countDone').textContent = dateEmails.filter(e => e.status === 'done').length;
+
+  const list = document.getElementById('emailList');
+  if (filtered.length === 0) {
+    list.innerHTML = '<div class="empty-msg">該当するメールはありません</div>';
+    return;
+  }
+
+  list.innerHTML = filtered.map(e => {
+    const prioClass = 'priority-' + e.priority;
+    const nextButtons = [];
+    if (e.status === 'unread') {
+      nextButtons.push(`<button class="btn btn-warning btn-sm" onclick="changeStatus('${e.id}','read')">確認済にする</button>`);
+      nextButtons.push(`<button class="btn btn-success btn-sm" onclick="changeStatus('${e.id}','done')">対応済にする</button>`);
+    } else if (e.status === 'read') {
+      nextButtons.push(`<button class="btn btn-success btn-sm" onclick="changeStatus('${e.id}','done')">対応済にする</button>`);
+      nextButtons.push(`<button class="btn btn-secondary btn-sm" onclick="changeStatus('${e.id}','unread')">未対応に戻す</button>`);
+    } else {
+      nextButtons.push(`<button class="btn btn-secondary btn-sm" onclick="changeStatus('${e.id}','unread')">未対応に戻す</button>`);
+    }
+
+    return `
+      <div class="email-card status-${e.status}">
+        <div class="email-body">
+          <div class="email-subject">${esc(e.subject)}</div>
+          <div class="email-meta">
+            ${e.from ? `<span>From: ${esc(e.from)}</span>` : ''}
+            <span>受信日: ${e.date}</span>
+            <span class="${prioClass}">優先度: ${PRIORITY_LABELS[e.priority]}</span>
+            <span>ステータス: ${STATUS_LABELS[e.status]}</span>
+          </div>
+          ${e.memo ? `<div class="email-memo">${esc(e.memo)}</div>` : ''}
+        </div>
+        <div class="email-actions">
+          ${nextButtons.join('')}
+          <button class="btn btn-primary btn-sm" onclick="editEmail('${e.id}')">編集</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteEmail('${e.id}')">削除</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// Export / Import
+function exportData() {
+  const data = localStorage.getItem(STORAGE_KEY) || '[]';
+  const blob = new Blob([data], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `email-tracker-${today()}.json`;
+  a.click();
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!Array.isArray(data)) throw new Error();
+      const existing = loadEmails();
+      const existingIds = new Set(existing.map(e => e.id));
+      let imported = 0;
+      for (const item of data) {
+        if (item.id && item.subject && !existingIds.has(item.id)) {
+          existing.push(item);
+          imported++;
+        }
+      }
+      saveEmails(existing);
+      render();
+      alert(`${imported}件のメールをインポートしました`);
+    } catch {
+      alert('ファイルの読み込みに失敗しました');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// Listen for filter changes
+document.getElementById('filterDate').addEventListener('change', render);
+document.getElementById('filterStatus').addEventListener('change', render);
+document.getElementById('filterPriority').addEventListener('change', render);
+
+// Initial render
+render();
+</script>
+</body>
+</html>
