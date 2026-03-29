@@ -170,6 +170,57 @@
   .priority-mid { color: #f39c12; font-weight: 700; }
   .priority-low { color: #27ae60; font-weight: 700; }
 
+  .reply-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .reply-needed { background: #fdecea; color: #e74c3c; }
+  .reply-not-needed { background: #eee; color: #888; }
+  .reply-replied { background: #e8f5e9; color: #27ae60; }
+
+  .email-summary {
+    font-size: 0.85rem;
+    color: #444;
+    margin-top: 6px;
+    padding: 6px 10px;
+    background: #eef6ff;
+    border-radius: 4px;
+    border-left: 3px solid #3498db;
+  }
+
+  .email-draft {
+    font-size: 0.85rem;
+    color: #444;
+    margin-top: 6px;
+    padding: 10px;
+    background: #fff9e6;
+    border-radius: 4px;
+    border-left: 3px solid #f39c12;
+    white-space: pre-wrap;
+    position: relative;
+  }
+  .email-draft-header {
+    font-weight: 700;
+    font-size: 0.8rem;
+    color: #b8860b;
+    margin-bottom: 4px;
+  }
+  .btn-copy {
+    position: absolute;
+    top: 6px; right: 6px;
+    padding: 3px 8px;
+    font-size: 0.7rem;
+    background: #f39c12;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .btn-copy:hover { opacity: 0.8; }
+
   .email-actions {
     display: flex;
     gap: 6px;
@@ -209,6 +260,7 @@
   <div class="summary-item"><span class="summary-dot dot-unread"></span> 未対応: <span id="countUnread">0</span></div>
   <div class="summary-item"><span class="summary-dot dot-read"></span> 確認済: <span id="countRead">0</span></div>
   <div class="summary-item"><span class="summary-dot dot-done"></span> 対応済: <span id="countDone">0</span></div>
+  <div class="summary-item" style="margin-left:auto"><span class="summary-dot" style="background:#9b59b6"></span> 要返信: <span id="countReply">0</span></div>
 </div>
 
 <div class="container">
@@ -266,6 +318,28 @@
     </div>
     <div class="form-row">
       <div class="form-group">
+        <label>内容の要約</label>
+        <textarea id="inputSummary" placeholder="メールの内容を簡潔にまとめる"></textarea>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="max-width:160px">
+        <label>返信要否</label>
+        <select id="inputReplyNeeded" onchange="toggleDraftField()">
+          <option value="none">返信不要</option>
+          <option value="needed">要返信</option>
+          <option value="replied">返信済</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row" id="draftRow" style="display:none">
+      <div class="form-group">
+        <label>返信の叩き台</label>
+        <textarea id="inputDraft" placeholder="返信文のドラフトを作成..." style="min-height:100px"></textarea>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
         <label>メモ</label>
         <textarea id="inputMemo" placeholder="対応内容や備考を入力"></textarea>
       </div>
@@ -291,6 +365,7 @@
 const STORAGE_KEY = 'email_tracker_data';
 const STATUS_LABELS = { unread: '未対応', read: '確認済', done: '対応済' };
 const PRIORITY_LABELS = { high: '高', mid: '中', low: '低' };
+const REPLY_LABELS = { none: '返信不要', needed: '要返信', replied: '返信済' };
 
 function today() {
   return new Date().toISOString().slice(0, 10);
@@ -326,7 +401,11 @@ function toggleForm(editData) {
     document.getElementById('inputDate').value = editData.date;
     document.getElementById('inputPriority').value = editData.priority;
     document.getElementById('inputStatus').value = editData.status;
+    document.getElementById('inputSummary').value = editData.summary || '';
+    document.getElementById('inputReplyNeeded').value = editData.replyNeeded || 'none';
+    document.getElementById('inputDraft').value = editData.draft || '';
     document.getElementById('inputMemo').value = editData.memo;
+    toggleDraftField();
     title.textContent = 'メールを編集';
     form.classList.add('show');
   } else if (form.classList.contains('show')) {
@@ -346,7 +425,16 @@ function clearForm() {
   document.getElementById('inputFrom').value = '';
   document.getElementById('inputPriority').value = 'mid';
   document.getElementById('inputStatus').value = 'unread';
+  document.getElementById('inputSummary').value = '';
+  document.getElementById('inputReplyNeeded').value = 'none';
+  document.getElementById('inputDraft').value = '';
   document.getElementById('inputMemo').value = '';
+  toggleDraftField();
+}
+
+function toggleDraftField() {
+  const val = document.getElementById('inputReplyNeeded').value;
+  document.getElementById('draftRow').style.display = (val === 'needed' || val === 'replied') ? 'flex' : 'none';
 }
 
 function saveEmail() {
@@ -362,6 +450,9 @@ function saveEmail() {
     date: document.getElementById('inputDate').value || today(),
     priority: document.getElementById('inputPriority').value,
     status: document.getElementById('inputStatus').value,
+    summary: document.getElementById('inputSummary').value.trim(),
+    replyNeeded: document.getElementById('inputReplyNeeded').value,
+    draft: document.getElementById('inputDraft').value.trim(),
     memo: document.getElementById('inputMemo').value.trim(),
     updatedAt: new Date().toISOString()
   };
@@ -429,6 +520,7 @@ function render() {
   document.getElementById('countUnread').textContent = dateEmails.filter(e => e.status === 'unread').length;
   document.getElementById('countRead').textContent = dateEmails.filter(e => e.status === 'read').length;
   document.getElementById('countDone').textContent = dateEmails.filter(e => e.status === 'done').length;
+  document.getElementById('countReply').textContent = dateEmails.filter(e => e.replyNeeded === 'needed').length;
 
   const list = document.getElementById('emailList');
   if (filtered.length === 0) {
@@ -458,7 +550,10 @@ function render() {
             <span>受信日: ${e.date}</span>
             <span class="${prioClass}">優先度: ${PRIORITY_LABELS[e.priority]}</span>
             <span>ステータス: ${STATUS_LABELS[e.status]}</span>
+            ${e.replyNeeded && e.replyNeeded !== 'none' ? `<span class="reply-badge ${e.replyNeeded === 'needed' ? 'reply-needed' : 'reply-replied'}">${REPLY_LABELS[e.replyNeeded]}</span>` : `<span class="reply-badge reply-not-needed">返信不要</span>`}
           </div>
+          ${e.summary ? `<div class="email-summary">${esc(e.summary)}</div>` : ''}
+          ${e.draft ? `<div class="email-draft"><div class="email-draft-header">返信の叩き台</div><button class="btn-copy" onclick="copyDraft('${e.id}')">コピー</button>${esc(e.draft)}</div>` : ''}
           ${e.memo ? `<div class="email-memo">${esc(e.memo)}</div>` : ''}
         </div>
         <div class="email-actions">
@@ -468,6 +563,17 @@ function render() {
         </div>
       </div>`;
   }).join('');
+}
+
+function copyDraft(id) {
+  const email = loadEmails().find(e => e.id === id);
+  if (email && email.draft) {
+    navigator.clipboard.writeText(email.draft).then(() => {
+      const btn = event.target;
+      btn.textContent = 'コピー済!';
+      setTimeout(() => { btn.textContent = 'コピー'; }, 1500);
+    });
+  }
 }
 
 function esc(str) {
