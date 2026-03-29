@@ -943,8 +943,10 @@ function importFromPowerAutomate(event) {
   Array.from(files).forEach(file => {
     const reader = new FileReader();
     reader.onload = function(e) {
-      const text = e.target.result.trim();
+      const text = e.target.result.replace(/\r\n/g, '\n').replace(/^\uFEFF/, '').trim();
+      alert('ファイル内容:\n' + text.slice(0, 200));
       const parsed = parsePowerAutomateText(text);
+      alert('解析結果: ' + parsed.length + '件\n' + JSON.stringify(parsed[0] || {}));
       if (parsed.length > 0) {
         for (const p of parsed) {
           const key = p.subject + '|' + p.from + '|' + p.date;
