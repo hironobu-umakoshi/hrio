@@ -190,7 +190,24 @@
     background: #eef6ff;
     border-radius: 4px;
     border-left: 3px solid #3498db;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
+  .email-summary.collapsed {
+    max-height: 4.8em;
+    overflow: hidden;
+    position: relative;
+  }
+  .email-summary.collapsed::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0; height: 2em;
+    background: linear-gradient(transparent, #eef6ff);
+  }
+  .btn-expand {
+    font-size: 0.8rem; color: #3498db; background: none; border: none;
+    cursor: pointer; padding: 2px 0; font-weight: 600;
+  }
+  .btn-expand:hover { text-decoration: underline; }
 
   .email-draft {
     font-size: 0.85rem;
@@ -819,7 +836,7 @@ function render() {
             <span>ステータス: ${STATUS_LABELS[e.status]}</span>
             ${e.replyNeeded && e.replyNeeded !== 'none' ? `<span class="reply-badge ${e.replyNeeded === 'needed' ? 'reply-needed' : 'reply-replied'}">${REPLY_LABELS[e.replyNeeded]}</span>` : `<span class="reply-badge reply-not-needed">返信不要</span>`}
           </div>
-          ${e.summary ? `<div class="email-summary">${esc(e.summary)}</div>` : ''}
+          ${e.summary ? `<div class="email-summary collapsed" id="sum-${e.id}">${esc(e.summary)}</div><button class="btn-expand" onclick="toggleSummary('${e.id}')">もっと見る</button>` : ''}
           ${e.draft ? `<div class="email-draft"><div class="email-draft-header">返信の叩き台</div><button class="btn-copy" onclick="copyDraft('${e.id}')">コピー</button>${e.fromEmail || e.from ? `<button class="btn-copy" style="right:60px;background:#0078d4" onclick="replyInOutlook('${e.id}')">Outlookで返信</button>` : ''}${esc(e.draft)}</div>` : ''}
           ${e.memo ? `<div class="email-memo">${esc(e.memo)}</div>` : ''}
         </div>
@@ -830,6 +847,18 @@ function render() {
         </div>
       </div>`;
   }).join('');
+}
+
+function toggleSummary(id) {
+  const el = document.getElementById('sum-' + id);
+  const btn = el.nextElementSibling;
+  if (el.classList.contains('collapsed')) {
+    el.classList.remove('collapsed');
+    btn.textContent = '折りたたむ';
+  } else {
+    el.classList.add('collapsed');
+    btn.textContent = 'もっと見る';
+  }
 }
 
 function replyInOutlook(id) {
