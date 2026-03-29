@@ -635,7 +635,7 @@ function importPasted() {
     from = lines[1].replace(/^(from|差出人|送信者)\s*[:：]\s*/i, '');
     bodyStart = 2;
   }
-  const summary = lines.slice(bodyStart).join('\n').slice(0, 300);
+  const summary = lines.slice(bodyStart).join('\n');
   const emails = loadEmails();
   emails.unshift({
     id: generateId(), subject, from, date: today(), priority: 'mid',
