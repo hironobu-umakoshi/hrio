@@ -950,6 +950,7 @@ function importFromPowerAutomate(event) {
       if (parsed.length > 0) {
         for (const p of parsed) {
           const key = p.subject + '|' + p.from + '|' + p.date;
+          alert('キー: ' + key + '\n既存: ' + existingKeys.has(key));
           if (existingKeys.has(key)) continue;
           existingKeys.add(key);
           emails.unshift({
@@ -963,6 +964,7 @@ function importFromPowerAutomate(event) {
         }
       }
       processed++;
+      alert('追加数: ' + totalAdded + ' / 既存メール数: ' + emails.length);
       if (processed === files.length) {
         saveEmails(emails);
         render();
