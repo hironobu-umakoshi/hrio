@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>メール対応トラッカー</title>
+<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
@@ -241,6 +242,49 @@
     text-align: right;
   }
 
+  /* Outlook buttons */
+  .outlook-btns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .btn-outlook { background: #0078d4; color: #fff; }
+  .btn-signout { background: #888; color: #fff; font-size: 0.8rem; padding: 5px 10px; }
+  .user-name { font-size: 0.85rem; opacity: 0.9; }
+  .btn-paste { background: #8e44ad; color: #fff; }
+
+  /* Modal overlay */
+  .modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: #fff; border-radius: 12px; padding: 28px; max-width: 640px; width: 90%;
+    max-height: 85vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  }
+  .modal h2 { margin-bottom: 16px; font-size: 1.2rem; }
+  .modal h3 { margin: 14px 0 8px; font-size: 1rem; color: #2c3e50; }
+  .modal p, .modal li { font-size: 0.9rem; line-height: 1.6; color: #555; }
+  .modal ol { padding-left: 20px; margin-bottom: 12px; }
+  .modal code {
+    background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 0.85rem;
+  }
+  .modal input[type="text"], .modal textarea {
+    width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 6px;
+    font-size: 0.9rem; margin: 8px 0;
+  }
+  .modal textarea { min-height: 150px; font-family: monospace; }
+  .modal .btn { margin-right: 8px; margin-top: 8px; }
+  .setup-note {
+    background: #fff3cd; border: 1px solid #ffc107; border-radius: 6px;
+    padding: 10px 14px; margin: 12px 0; font-size: 0.85rem;
+  }
+  .fetch-status {
+    padding: 8px 14px; margin: 8px 0; border-radius: 6px;
+    font-size: 0.85rem; display: none;
+  }
+  .fetch-status.show { display: block; }
+  .fetch-status.success { background: #d4edda; color: #155724; }
+  .fetch-status.error { background: #f8d7da; color: #721c24; }
+  .fetch-status.loading { background: #d1ecf1; color: #0c5460; }
+
   @media (max-width: 600px) {
     header { padding: 14px 16px; }
     .container { padding: 14px; }
@@ -253,6 +297,14 @@
 
 <header>
   <h1>メール対応トラッカー</h1>
+  <div class="outlook-btns">
+    <span class="user-name" id="userName"></span>
+    <button class="btn btn-outlook" id="btnSignIn" onclick="msalSignIn()">Microsoftでサインイン</button>
+    <button class="btn btn-signout" id="btnSignOut" onclick="msalSignOut()" style="display:none">サインアウト</button>
+    <button class="btn btn-outlook" id="btnFetch" onclick="fetchOutlookEmails()" style="display:none">Outlookから取得</button>
+    <button class="btn btn-paste" onclick="showPasteModal()">コピペ取込</button>
+    <button class="btn btn-secondary btn-sm" onclick="showSetup()">設定</button>
+  </div>
   <div class="header-date" id="todayDate"></div>
 </header>
 
@@ -262,6 +314,61 @@
   <div class="summary-item"><span class="summary-dot dot-done"></span> 対応済: <span id="countDone">0</span></div>
   <div class="summary-item" style="margin-left:auto"><span class="summary-dot" style="background:#9b59b6"></span> 要返信: <span id="countReply">0</span></div>
 </div>
+
+<!-- セットアップモーダル -->
+<div class="modal-overlay" id="setupModal">
+  <div class="modal">
+    <h2>Outlook連携セットアップ</h2>
+    <div class="setup-note">
+      <strong>起動方法:</strong> このファイルはローカルサーバー経由で開く必要があります。<br>
+      ターミナルで <code>cd ~/hrio && python3 -m http.server 8080</code> を実行し、<br>
+      ブラウザで <code>http://localhost:8080/email-tracker.html</code> を開いてください。
+    </div>
+    <h3>手順1: Azureアプリ登録</h3>
+    <ol>
+      <li><a href="https://entra.microsoft.com/" target="_blank">entra.microsoft.com</a> に九州大学のアカウントでサインイン</li>
+      <li>左メニュー →「アプリの登録」→「新規登録」</li>
+      <li>名前: <code>メール対応トラッカー</code>（任意）</li>
+      <li>サポートされているアカウントの種類:「この組織ディレクトリのみ」</li>
+      <li>リダイレクトURI: 種類を<strong>「SPA」</strong>にして <code>http://localhost:8080</code> を入力</li>
+      <li>「登録」をクリック</li>
+      <li>概要ページの<strong>「アプリケーション (クライアント) ID」</strong>をコピー</li>
+    </ol>
+    <h3>手順2: APIアクセス許可を追加</h3>
+    <ol>
+      <li>左メニュー →「APIのアクセス許可」→「アクセス許可の追加」</li>
+      <li>「Microsoft Graph」→「委任されたアクセス許可」</li>
+      <li><code>Mail.Read</code> を検索して選択 →「アクセス許可の追加」</li>
+    </ol>
+    <h3>手順3: Client IDを入力</h3>
+    <input type="text" id="inputClientId" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success" onclick="saveSetup()">保存</button>
+      <button class="btn btn-secondary" onclick="closeSetup()">閉じる</button>
+    </div>
+    <p style="margin-top:12px;font-size:0.8rem;color:#999">※ Client IDはこのブラウザのlocalStorageに保存されます。外部には送信されません。</p>
+  </div>
+</div>
+
+<!-- コピペ取込モーダル -->
+<div class="modal-overlay" id="pasteModal">
+  <div class="modal">
+    <h2>メールをコピペで取込</h2>
+    <p>Outlook Webでメールを開き、内容をコピーして下の欄に貼り付けてください。<br>
+    以下の形式で自動解析します:</p>
+    <p style="font-size:0.8rem;color:#888;margin:6px 0">
+      1行目: 件名<br>2行目: 送信者（From: xxx）<br>3行目以降: 本文（要約として取込）
+    </p>
+    <textarea id="pasteArea" placeholder="ここにメールの内容を貼り付け..."></textarea>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-success" onclick="importPasted()">取込</button>
+      <button class="btn btn-secondary" onclick="closePasteModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 取得ステータス -->
+<div class="fetch-status" id="fetchStatus"></div>
 
 <div class="container">
   <div class="filter-bar">
@@ -362,7 +469,167 @@
 </div>
 
 <script>
+const CLIENT_ID_KEY = 'email_tracker_client_id';
 const STORAGE_KEY = 'email_tracker_data';
+
+// ===== MSAL / Outlook 連携 =====
+let msalInstance = null;
+let msalAccount = null;
+
+function initMsal() {
+  const clientId = localStorage.getItem(CLIENT_ID_KEY);
+  if (!clientId) return;
+  try {
+    msalInstance = new msal.PublicClientApplication({
+      auth: { clientId: clientId, redirectUri: window.location.origin },
+      cache: { cacheLocation: 'localStorage' }
+    });
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      msalAccount = accounts[0];
+      updateAuthUI();
+    }
+  } catch (e) { console.error('MSAL init error:', e); }
+}
+
+async function msalSignIn() {
+  if (!msalInstance) { showSetup(); return; }
+  try {
+    const resp = await msalInstance.loginPopup({ scopes: ['Mail.Read'] });
+    msalAccount = resp.account;
+    updateAuthUI();
+  } catch (e) {
+    showStatus('サインインに失敗しました: ' + e.message, 'error');
+  }
+}
+
+function msalSignOut() {
+  if (!msalInstance) return;
+  msalInstance.logoutPopup();
+  msalAccount = null;
+  updateAuthUI();
+}
+
+function updateAuthUI() {
+  const signIn = document.getElementById('btnSignIn');
+  const signOut = document.getElementById('btnSignOut');
+  const fetch_ = document.getElementById('btnFetch');
+  const name = document.getElementById('userName');
+  if (msalAccount) {
+    signIn.style.display = 'none';
+    signOut.style.display = '';
+    fetch_.style.display = '';
+    name.textContent = msalAccount.name || msalAccount.username;
+  } else {
+    signIn.style.display = '';
+    signOut.style.display = 'none';
+    fetch_.style.display = 'none';
+    name.textContent = '';
+  }
+}
+
+async function fetchOutlookEmails() {
+  if (!msalInstance || !msalAccount) { showStatus('先にサインインしてください', 'error'); return; }
+  showStatus('メールを取得中...', 'loading');
+  try {
+    const token = await msalInstance.acquireTokenSilent({
+      scopes: ['Mail.Read'], account: msalAccount
+    }).catch(() => msalInstance.acquireTokenPopup({ scopes: ['Mail.Read'] }));
+
+    const todayStr = today() + 'T00:00:00Z';
+    const url = 'https://graph.microsoft.com/v1.0/me/messages'
+      + '?$filter=receivedDateTime ge ' + todayStr
+      + '&$top=50&$select=subject,from,receivedDateTime,bodyPreview,isRead'
+      + '&$orderby=receivedDateTime desc';
+    const resp = await fetch(url, {
+      headers: { 'Authorization': 'Bearer ' + token.accessToken }
+    });
+    if (!resp.ok) throw new Error('API error: ' + resp.status);
+    const data = await resp.json();
+    const emails = loadEmails();
+    const existingSubjects = new Set(emails.map(e => e.subject + '|' + e.from));
+    let added = 0;
+    for (const m of (data.value || [])) {
+      const fromAddr = m.from?.emailAddress?.address || '';
+      const fromName = m.from?.emailAddress?.name || fromAddr;
+      const key = m.subject + '|' + fromName;
+      if (existingSubjects.has(key)) continue;
+      emails.unshift({
+        id: generateId(),
+        subject: m.subject || '(件名なし)',
+        from: fromName,
+        date: m.receivedDateTime ? m.receivedDateTime.slice(0, 10) : today(),
+        priority: 'mid',
+        status: m.isRead ? 'read' : 'unread',
+        summary: (m.bodyPreview || '').slice(0, 200),
+        replyNeeded: 'none',
+        draft: '',
+        memo: '',
+        fromEmail: fromAddr,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      added++;
+    }
+    saveEmails(emails);
+    render();
+    showStatus(added + '件の新しいメールを取得しました（合計: ' + (data.value || []).length + '件）', 'success');
+  } catch (e) {
+    showStatus('取得に失敗しました: ' + e.message, 'error');
+  }
+}
+
+function showStatus(msg, type) {
+  const el = document.getElementById('fetchStatus');
+  el.textContent = msg;
+  el.className = 'fetch-status show ' + type;
+  if (type !== 'loading') setTimeout(() => { el.classList.remove('show'); }, 5000);
+}
+
+// ===== セットアップ =====
+function showSetup() {
+  document.getElementById('inputClientId').value = localStorage.getItem(CLIENT_ID_KEY) || '';
+  document.getElementById('setupModal').classList.add('show');
+}
+function closeSetup() { document.getElementById('setupModal').classList.remove('show'); }
+function saveSetup() {
+  const id = document.getElementById('inputClientId').value.trim();
+  if (!id) { alert('Client IDを入力してください'); return; }
+  localStorage.setItem(CLIENT_ID_KEY, id);
+  closeSetup();
+  initMsal();
+  showStatus('Client IDを保存しました。「Microsoftでサインイン」をクリックしてください。', 'success');
+}
+
+// ===== コピペ取込 =====
+function showPasteModal() { document.getElementById('pasteModal').classList.add('show'); }
+function closePasteModal() {
+  document.getElementById('pasteArea').value = '';
+  document.getElementById('pasteModal').classList.remove('show');
+}
+function importPasted() {
+  const text = document.getElementById('pasteArea').value.trim();
+  if (!text) { alert('テキストを貼り付けてください'); return; }
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  const subject = lines[0] || '(件名なし)';
+  let from = '';
+  let bodyStart = 1;
+  if (lines[1] && /^(from|差出人|送信者)\s*[:：]/i.test(lines[1])) {
+    from = lines[1].replace(/^(from|差出人|送信者)\s*[:：]\s*/i, '');
+    bodyStart = 2;
+  }
+  const summary = lines.slice(bodyStart).join('\n').slice(0, 300);
+  const emails = loadEmails();
+  emails.unshift({
+    id: generateId(), subject, from, date: today(), priority: 'mid',
+    status: 'unread', summary, replyNeeded: 'none', draft: '', memo: '',
+    fromEmail: '', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+  });
+  saveEmails(emails);
+  closePasteModal();
+  render();
+  showStatus('メールを取込みました', 'success');
+}
 const STATUS_LABELS = { unread: '未対応', read: '確認済', done: '対応済' };
 const PRIORITY_LABELS = { high: '高', mid: '中', low: '低' };
 const REPLY_LABELS = { none: '返信不要', needed: '要返信', replied: '返信済' };
@@ -459,7 +726,7 @@ function saveEmail() {
 
   if (editId) {
     const idx = emails.findIndex(e => e.id === editId);
-    if (idx !== -1) emails[idx] = data;
+    if (idx !== -1) { data.fromEmail = emails[idx].fromEmail || ''; emails[idx] = data; }
   } else {
     data.createdAt = data.updatedAt;
     emails.unshift(data);
@@ -553,7 +820,7 @@ function render() {
             ${e.replyNeeded && e.replyNeeded !== 'none' ? `<span class="reply-badge ${e.replyNeeded === 'needed' ? 'reply-needed' : 'reply-replied'}">${REPLY_LABELS[e.replyNeeded]}</span>` : `<span class="reply-badge reply-not-needed">返信不要</span>`}
           </div>
           ${e.summary ? `<div class="email-summary">${esc(e.summary)}</div>` : ''}
-          ${e.draft ? `<div class="email-draft"><div class="email-draft-header">返信の叩き台</div><button class="btn-copy" onclick="copyDraft('${e.id}')">コピー</button>${esc(e.draft)}</div>` : ''}
+          ${e.draft ? `<div class="email-draft"><div class="email-draft-header">返信の叩き台</div><button class="btn-copy" onclick="copyDraft('${e.id}')">コピー</button>${e.fromEmail || e.from ? `<button class="btn-copy" style="right:60px;background:#0078d4" onclick="replyInOutlook('${e.id}')">Outlookで返信</button>` : ''}${esc(e.draft)}</div>` : ''}
           ${e.memo ? `<div class="email-memo">${esc(e.memo)}</div>` : ''}
         </div>
         <div class="email-actions">
@@ -563,6 +830,17 @@ function render() {
         </div>
       </div>`;
   }).join('');
+}
+
+function replyInOutlook(id) {
+  const email = loadEmails().find(e => e.id === id);
+  if (!email) return;
+  const to = email.fromEmail || email.from;
+  const subject = 'Re: ' + email.subject;
+  const body = email.draft || '';
+  window.open('mailto:' + encodeURIComponent(to)
+    + '?subject=' + encodeURIComponent(subject)
+    + '&body=' + encodeURIComponent(body));
 }
 
 function copyDraft(id) {
@@ -627,6 +905,9 @@ document.getElementById('filterPriority').addEventListener('change', render);
 
 // Initial render
 render();
+
+// MSAL初期化
+initMsal();
 </script>
 </body>
 </html>
