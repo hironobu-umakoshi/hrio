@@ -477,6 +477,10 @@
   <div class="email-list" id="emailList"></div>
 
   <div class="export-bar">
+    <label class="btn btn-outlook btn-sm" style="display:inline-block">
+      OneDriveから取込
+      <input type="file" accept=".json,.txt" onchange="importFromPowerAutomate(event)" style="display:none">
+    </label>
     <button class="btn btn-secondary btn-sm" onclick="exportData()">データエクスポート (JSON)</button>
     <label class="btn btn-secondary btn-sm" style="display:inline-block">
       データインポート
@@ -925,6 +929,72 @@ function importData(event) {
   };
   reader.readAsText(file);
   event.target.value = '';
+}
+
+// ===== Power Automate ファイル取込 =====
+function importFromPowerAutomate(event) {
+  const files = event.target.files;
+  if (!files.length) return;
+  let totalAdded = 0;
+  let processed = 0;
+  const emails = loadEmails();
+  const existingKeys = new Set(emails.map(e => e.subject + '|' + e.from + '|' + e.date));
+
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const text = e.target.result.trim();
+      const parsed = parsePowerAutomateText(text);
+      if (parsed.length > 0) {
+        for (const p of parsed) {
+          const key = p.subject + '|' + p.from + '|' + p.date;
+          if (existingKeys.has(key)) continue;
+          existingKeys.add(key);
+          emails.unshift({
+            id: generateId(), subject: p.subject, from: p.from,
+            date: p.date, priority: 'mid', status: 'unread',
+            summary: p.preview, replyNeeded: 'none', draft: '', memo: '',
+            fromEmail: p.from,
+            createdAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+          });
+          totalAdded++;
+        }
+      }
+      processed++;
+      if (processed === files.length) {
+        saveEmails(emails);
+        render();
+        showStatus(totalAdded + '件のメールを取込みました', 'success');
+      }
+    };
+    reader.readAsText(file);
+  });
+  event.target.value = '';
+}
+
+function parsePowerAutomateText(text) {
+  const results = [];
+  const lines = text.split('\n');
+  let current = {};
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('件名：')) {
+      if (current.subject) results.push(current);
+      current = { subject: '', from: '', date: '', preview: '' };
+      current.subject = trimmed.replace('件名：', '').trim();
+    } else if (trimmed.startsWith('差出人：')) {
+      current.from = trimmed.replace('差出人：', '').trim();
+    } else if (trimmed.startsWith('受信日時：')) {
+      const raw = trimmed.replace('受信日時：', '').trim();
+      current.date = raw.slice(0, 10);
+    } else if (trimmed.startsWith('プレビュー：')) {
+      current.preview = trimmed.replace('プレビュー：', '').trim();
+    } else if (current.preview !== undefined && current.subject) {
+      if (trimmed) current.preview += '\n' + trimmed;
+    }
+  }
+  if (current.subject) results.push(current);
+  return results;
 }
 
 // Listen for filter changes
